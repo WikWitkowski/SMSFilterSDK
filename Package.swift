@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "SMSFilterSDK",
     platforms: [
-        .iOS(.v14)  // Wymagana platforma iOS 14 lub nowsza (IdentityLookup od iOS 11 wzwyż)
+        .iOS(.v16)  // Wymagana platforma iOS 14 lub nowsza (IdentityLookup od iOS 11 wzwyż)
     ],
     products: [
         .library(
