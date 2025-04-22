@@ -3,7 +3,7 @@ import IdentityLookup
 
 /// Klasa dokonująca klasyfikacji wiadomości SMS/MMS na podstawie lokalnych reguł.
 public class LocalRulesClassifier {
-    private let database: LocalRulesDatabase
+    let database: LocalRulesDatabase
 
     public init(database: LocalRulesDatabase) {
         self.database = database
