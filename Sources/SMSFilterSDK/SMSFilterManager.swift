@@ -8,45 +8,37 @@ public class SMSFilterManager {
     private let appGroupID: String
 
     private init() {
-        // 1. Wyliczamy App Group ID na podstawie Bundle ID
-        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        let bundleID   = Bundle.main.bundleIdentifier ?? ""
         self.appGroupID = "group.\(bundleID)"
-
-        // 2. Inicjalizujemy bazę i classifier
-        let database = LocalRulesDatabase(appGroupIdentifier: appGroupID)
+        let database   = LocalRulesDatabase(appGroupIdentifier: appGroupID)
         self.classifier = LocalRulesClassifier(database: database)
     }
 
-    /// Zwraca parę (akcja, subAction) na podstawie zapytania filtrowania
+    /// Zwraca (.filter/.allow, subAction) – teraz Promocje/Transakcje są brane pod uwagę jako filter
     public func classify(
-        query: ILMessageFilterQueryRequest
+      query: ILMessageFilterQueryRequest
     ) -> (action: ILMessageFilterAction, subAction: ILMessageFilterSubAction) {
-        // 1. Najpierw podstawowa klasyfikacja (.allow lub .filter)
-        let action = classifier.classifyMessage(
-            sender: query.sender,
-            message: query.messageBody
-        )
+        let bodyLower   = (query.messageBody ?? "").lowercased()
+        let senderLower = (query.sender ?? "").lowercased()
+        let rules       = LocalRulesDatabase(appGroupIdentifier: appGroupID).loadRules()
 
-        // 2. Domyślny subAction
-        var sub: ILMessageFilterSubAction = .none
-
-        // 3. Jeżeli wiadomość jest filtrowana jako spam, dobieramy kategorię
-        if action == .filter {
-            let body = (query.messageBody ?? "").lowercased()
-            // Wczytujemy reguły z tej samej App Group
-            let rules = LocalRulesDatabase(appGroupIdentifier: appGroupID).loadRules()
-
-            // 3a. Najpierw promocje
-            if rules.promoKeywords.contains(where: { body.contains($0.lowercased()) }) {
-                sub = .promotionalOffers
-            }
-            // 3b. Następnie transakcje
-            else if rules.transactionKeywords.contains(where: { body.contains($0.lowercased()) }) {
-                sub = .transactionalFinance
-            }
-            // 3c. W przeciwnym razie sub pozostaje .none (trafi do Junk)
+        // 1. blockedSenders → zawsze filter (junk)
+        if rules.blockedSenders.contains(where: { senderLower.contains($0.lowercased()) }) {
+            return (.filter, .none)
         }
-
-        return (action, sub)
+        // 2. promoKeywords → filter + subAction promocyjny
+        if rules.promoKeywords.contains(where: { bodyLower.contains($0.lowercased()) }) {
+            return (.filter, .promotionalOffers)
+        }
+        // 3. transactionKeywords → filter + subAction transakcyjny
+        if rules.transactionKeywords.contains(where: { bodyLower.contains($0.lowercased()) }) {
+            return (.filter, .transactionalFinance)
+        }
+        // 4. spamKeywords → filter (junk)
+        if rules.spamKeywords.contains(where: { bodyLower.contains($0.lowercased()) }) {
+            return (.filter, .none)
+        }
+        // 5. w przeciwnym razie allow
+        return (.allow, .none)
     }
 }
