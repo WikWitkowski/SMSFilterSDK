@@ -1,48 +1,50 @@
 import Foundation
 import IdentityLookup
 
-/// Główna klasa zarządzająca logiką filtrowania SMS w SDK.
 public class SMSFilterManager {
     @MainActor public static let shared = SMSFilterManager()
 
     private let classifier: LocalRulesClassifier
-
-    let bundleID = Bundle.main.bundleIdentifier!           // np. "com.twojafirma.MyApp"
-                  // "group.com.twojafirma.MyApp"
-  
+    private let appGroupID: String
 
     private init() {
-        // Inicjalizacja lokalnej bazy reguł z identyfikatorem App Group (zmień identyfikator na własny!)
-        let appGroupID = "group.\(bundleID)"  // Uwaga: podmień na rzeczywisty identyfikator Twojej App Group
+        // 1. Wyliczamy App Group ID na podstawie Bundle ID
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        self.appGroupID = "group.\(bundleID)"
+
+        // 2. Inicjalizujemy bazę i classifier
         let database = LocalRulesDatabase(appGroupIdentifier: appGroupID)
         self.classifier = LocalRulesClassifier(database: database)
     }
 
-  public func classify(
+    /// Zwraca parę (akcja, subAction) na podstawie zapytania filtrowania
+    public func classify(
         query: ILMessageFilterQueryRequest
     ) -> (action: ILMessageFilterAction, subAction: ILMessageFilterSubAction) {
+        // 1. Najpierw podstawowa klasyfikacja (.allow lub .filter)
         let action = classifier.classifyMessage(
             sender: query.sender,
             message: query.messageBody
         )
 
-        // domyślnie brak subAction
+        // 2. Domyślny subAction
         var sub: ILMessageFilterSubAction = .none
 
-        // jeżeli to filtrowanie (spam), spróbuj wybrać kategorię
+        // 3. Jeżeli wiadomość jest filtrowana jako spam, dobieramy kategorię
         if action == .filter {
             let body = (query.messageBody ?? "").lowercased()
-            let rules = LocalRulesDatabase(appGroupIdentifier: classifier.database.appGroupIdentifier).loadRules()
+            // Wczytujemy reguły z tej samej App Group
+            let rules = LocalRulesDatabase(appGroupIdentifier: appGroupID).loadRules()
 
-            // np. najpierw promocje
+            // 3a. Najpierw promocje
             if rules.promoKeywords.contains(where: { body.contains($0.lowercased()) }) {
                 sub = .promotionalOffers
             }
-            // albo transakcje
+            // 3b. Następnie transakcje
             else if rules.transactionKeywords.contains(where: { body.contains($0.lowercased()) }) {
                 sub = .transactionalFinance
             }
-            // w przeciwnym razie pozostaje `.none` i trafi do Junk
+            // 3c. W przeciwnym razie sub pozostaje .none (trafi do Junk)
         }
 
         return (action, sub)
