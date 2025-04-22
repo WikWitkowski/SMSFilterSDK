@@ -18,8 +18,33 @@ public class SMSFilterManager {
         self.classifier = LocalRulesClassifier(database: database)
     }
 
-    /// Przetwarza zapytanie filtrowania i zwraca decyzję (allow lub filter) dla danej wiadomości.
-    public func filterMessage(query: ILMessageFilterQueryRequest) -> ILMessageFilterAction {
-        return classifier.classifyMessage(sender: query.sender, message: query.messageBody)
+  public func classify(
+        query: ILMessageFilterQueryRequest
+    ) -> (action: ILMessageFilterAction, subAction: ILMessageFilterSubAction) {
+        let action = classifier.classifyMessage(
+            sender: query.sender,
+            message: query.messageBody
+        )
+
+        // domyślnie brak subAction
+        var sub: ILMessageFilterSubAction = .none
+
+        // jeżeli to filtrowanie (spam), spróbuj wybrać kategorię
+        if action == .filter {
+            let body = (query.messageBody ?? "").lowercased()
+            let rules = LocalRulesDatabase(appGroupIdentifier: classifier.database.appGroupIdentifier).loadRules()
+
+            // np. najpierw promocje
+            if rules.promoKeywords.contains(where: { body.contains($0.lowercased()) }) {
+                sub = .promotionalOffers
+            }
+            // albo transakcje
+            else if rules.transactionKeywords.contains(where: { body.contains($0.lowercased()) }) {
+                sub = .transactionalFinance
+            }
+            // w przeciwnym razie pozostaje `.none` i trafi do Junk
+        }
+
+        return (action, sub)
     }
 }
