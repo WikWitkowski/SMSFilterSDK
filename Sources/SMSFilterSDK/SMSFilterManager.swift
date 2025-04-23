@@ -1,3 +1,4 @@
+import Foundation
 import IdentityLookup
 
 public class SMSFilterManager {
@@ -6,6 +7,10 @@ public class SMSFilterManager {
 
     private init() {}
 
+    /// Zwraca parę (action, subAction):
+    /// - .promotion / .promotionalOffers  → Promocje
+    /// - .junk      / .none               → Niechciane (Spam)
+    /// - .allow     / .none               → Pozwól
     public func classify(
       query: ILMessageFilterQueryRequest
     ) -> (action: ILMessageFilterAction, subAction: ILMessageFilterSubAction) {
@@ -15,18 +20,21 @@ public class SMSFilterManager {
 
         print("🛠 classify() called – sender: \(sender), body: \(body)")
 
-        // 1. Promocje
-        if let m = r.promoKeywords.first(where: { body.contains($0.lowercased()) }) {
-            print("🟡 matched promoKeywords: \(m)")
-            return (.filter, .promotionalOffers)
+        // 1) PROMOCJE
+        if let match = r.promoKeywords.first(where: { body.contains($0.lowercased()) }) {
+            print("🟡 matched promoKeywords: \(match)")
+            return (.promotion, .promotionalOffers)
         }
-        // 2. Spam lub zablokowani nadawcy
-        if r.blockedSenders.contains(where: { sender.contains($0.lowercased()) })
-         || r.spamKeywords.contains(where: { body.contains($0.lowercased()) }) {
-            print("🔴 matched spam/blocked")
-            return (.filter, .none)
+        // 2) SPAM / BLOKOWANI NADAWCY
+        if r.blockedSenders.contains(where: { sender.contains($0.lowercased()) }) {
+            print("🔴 matched blockedSenders")
+            return (.junk, .none)
         }
-        // 3. Pozostałe
+        if let match = r.spamKeywords.first(where: { body.contains($0.lowercased()) }) {
+            print("🔴 matched spamKeywords: \(match)")
+            return (.junk, .none)
+        }
+        // 3) POZOSTAŁE
         print("✅ no match → allow")
         return (.allow, .none)
     }
