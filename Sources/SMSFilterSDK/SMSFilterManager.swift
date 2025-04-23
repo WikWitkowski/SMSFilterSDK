@@ -11,26 +11,24 @@ public class SMSFilterManager {
         self.rules = Rules.example
     }
 
-    public func classify(
-        query: ILMessageFilterQueryRequest
-    ) -> (action: ILMessageFilterAction, subAction: ILMessageFilterSubAction) {
-        let sender = (query.sender ?? "").lowercased()
-        let body   = (query.messageBody ?? "").lowercased()
-        let r      = rules
+   public func classify(
+  query: ILMessageFilterQueryRequest
+) -> (action: ILMessageFilterAction, subAction: ILMessageFilterSubAction) {
+    let sender = (query.sender ?? "").lowercased()
+    let body   = (query.messageBody ?? "").lowercased()
+    let r      = Rules.example  // lub inna Twoja reguła
 
-        if r.blockedSenders.contains(where: { sender.contains($0.lowercased()) }) {
-            return (.filter, .none)
-        }
-        if r.promoKeywords.contains(where: { body.contains($0.lowercased()) }) {
-            return (.filter, .promotionalOffers)
-        }
-        if r.transactionKeywords.contains(where: { body.contains($0.lowercased()) }) {
-            return (.filter, .transactionalFinance)
-        }
-        if r.spamKeywords.contains(where: { body.contains($0.lowercased()) }) {
-            return (.filter, .none)
-        }
-        return (.allow, .none)
+    // 1. Promocje → filter + promotionalOffers
+    if r.promoKeywords.contains(where: { body.contains($0.lowercased()) }) {
+        return (.filter, .promotionalOffers)
     }
+    // 2. Spam (blockedSender albo spamKeywords) → filter + none
+    if r.blockedSenders.contains(where: { sender.contains($0.lowercased()) })
+     || r.spamKeywords.contains(where: { body.contains($0.lowercased()) }) {
+        return (.filter, .none)
+    }
+    // 3. Pozostałe → allow
+    return (.allow, .none)
+}
 }
 
